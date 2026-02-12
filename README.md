@@ -88,9 +88,13 @@ cp bin/Release/KRPC.SCANsat.dll /tmp/KRPC.SCANsat-vX.Y.Z/GameData/kRPC/
 
 ## CKAN
 
-This project can be distributed via custom metadata repos. The metadata entry for `v1.1.0` currently lives in:
+This project is distributed via a custom metadata repo:
 
-- `/Users/jason/src/ksp-mods/jason-ckan-metadata/KRPC.SCANsat/KRPC.SCANsat-v1.1.0.ckan`
+- https://github.com/jasonteknet/jason-ckan-metadata
+
+Example metadata entry for this mod:
+
+- https://github.com/jasonteknet/jason-ckan-metadata/blob/main/KRPC.SCANsat/KRPC.SCANsat-v1.1.0.ckan
 
 ## Notes
 
