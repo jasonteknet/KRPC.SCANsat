@@ -3,3 +3,6 @@ obj/
 *.user
 *.suo
 .vs/
+lib/*.dll
+lib/*.xml
+lib/*.pdb

@@ -61,6 +61,9 @@ It is intended for automation workflows where scripts need to query map coverage
 
 From repository root:
 
+1. Copy required reference assemblies into `lib/` (see `lib/README.md`).
+2. Build:
+
 ```bash
 msbuild /p:Configuration=Release KRPC.SCANsat.csproj
 ```
