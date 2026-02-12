@@ -2,7 +2,7 @@
 
 ## Scope
 
-- Applies to: `/Users/jason/src/ksp-mods/KRPC.SCANsat`
+- Applies to: repository root (`KRPC.SCANsat`)
 
 ## Project intent
 
