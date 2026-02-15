@@ -63,6 +63,16 @@ namespace KRPC.SCANsat {
 			Legacyless(() => SCANsat.Slope(bodyName, latitude, longitude, sampleOffsetMeters));
 
 		[KRPCProcedure]
+		public static double Roughness(string bodyName, double latitude, double longitude, double radiusMeters = 60.0, double stepMeters = 20.0, double sampleOffsetMeters = 5.0) =>
+			Legacyless(() => SCANsat.Roughness(bodyName, latitude, longitude, radiusMeters, stepMeters, sampleOffsetMeters));
+
+		[KRPCProcedure]
+		public static LandingSiteAssessment AssessLandingSite(string bodyName, double latitude, double longitude, double radiusMeters = 60.0, double stepMeters = 20.0, double sampleOffsetMeters = 5.0, double maxSafeSlopeDeg = 12.0, double maxSafeRoughnessDeg = 3.0) =>
+			FromLegacyLandingSiteAssessment(
+				Legacyless(() => SCANsat.AssessLandingSite(bodyName, latitude, longitude, radiusMeters, stepMeters, sampleOffsetMeters, maxSafeSlopeDeg, maxSafeRoughnessDeg))
+			);
+
+		[KRPCProcedure]
 		public static IList<string> AvailableResources() => Legacyless(() => SCANsat.AvailableResources());
 
 		[KRPCProcedure]
@@ -98,6 +108,21 @@ namespace KRPC.SCANsat {
 
 		private static ScannerModuleStatus FromLegacyScannerModuleStatus(KRPC.SCANsat.ScannerModuleStatus status) =>
 			new ScannerModuleStatus(status.VesselName, status.PartFlightId, status.PartTitle, FromLegacyScannerFamily(status.Family), status.SensorMask, status.Active);
+
+		private static LandingSiteAssessment FromLegacyLandingSiteAssessment(KRPC.SCANsat.LandingSiteAssessment assessment) =>
+			new LandingSiteAssessment(
+				assessment.LatitudeDeg,
+				assessment.LongitudeDeg,
+				assessment.ElevationM,
+				assessment.MeanSlopeDeg,
+				assessment.MaxSlopeDeg,
+				assessment.RoughnessDeg,
+				assessment.SampleCount,
+				assessment.HiResCoveragePercent,
+				assessment.CenterHiResCovered,
+				assessment.Score,
+				assessment.Recommendation
+			);
 
 		[KRPCEnum]
 		public enum ScanType {
@@ -161,6 +186,56 @@ namespace KRPC.SCANsat {
 
 			[KRPCProperty]
 			public bool Active { get; private set; }
+		}
+
+		[KRPCClass]
+		public class LandingSiteAssessment {
+			public LandingSiteAssessment(double latitudeDeg, double longitudeDeg, double elevationM, double meanSlopeDeg, double maxSlopeDeg, double roughnessDeg, int sampleCount, double hiResCoveragePercent, bool centerHiResCovered, double score, string recommendation) {
+				LatitudeDeg = latitudeDeg;
+				LongitudeDeg = longitudeDeg;
+				ElevationM = elevationM;
+				MeanSlopeDeg = meanSlopeDeg;
+				MaxSlopeDeg = maxSlopeDeg;
+				RoughnessDeg = roughnessDeg;
+				SampleCount = sampleCount;
+				HiResCoveragePercent = hiResCoveragePercent;
+				CenterHiResCovered = centerHiResCovered;
+				Score = score;
+				Recommendation = recommendation;
+			}
+
+			[KRPCProperty]
+			public double LatitudeDeg { get; private set; }
+
+			[KRPCProperty]
+			public double LongitudeDeg { get; private set; }
+
+			[KRPCProperty]
+			public double ElevationM { get; private set; }
+
+			[KRPCProperty]
+			public double MeanSlopeDeg { get; private set; }
+
+			[KRPCProperty]
+			public double MaxSlopeDeg { get; private set; }
+
+			[KRPCProperty]
+			public double RoughnessDeg { get; private set; }
+
+			[KRPCProperty]
+			public int SampleCount { get; private set; }
+
+			[KRPCProperty]
+			public double HiResCoveragePercent { get; private set; }
+
+			[KRPCProperty]
+			public bool CenterHiResCovered { get; private set; }
+
+			[KRPCProperty]
+			public double Score { get; private set; }
+
+			[KRPCProperty]
+			public string Recommendation { get; private set; }
 		}
 
 		[KRPCException(MappedException = typeof(SCANsatServiceException))]

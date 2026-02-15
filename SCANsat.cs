@@ -244,6 +244,123 @@ namespace KRPC.SCANsat {
 					(GetSensorMask(module) & familyMask) != 0);
 		}
 
+		private static void RequireFinite(string name, double value) {
+			if(double.IsNaN(value) || double.IsInfinity(value))
+				throw new SCANsatServiceException(name + " must be finite.");
+		}
+
+		private static void RequirePositive(string name, double value) {
+			RequireFinite(name, value);
+			if(value <= 0)
+				throw new SCANsatServiceException(name + " must be > 0.");
+		}
+
+		private static void RequireNonNegative(string name, double value) {
+			RequireFinite(name, value);
+			if(value < 0)
+				throw new SCANsatServiceException(name + " must be >= 0.");
+		}
+
+		private static double Clamp01(double value) {
+			if(value < 0)
+				return 0;
+			if(value > 1)
+				return 1;
+			return value;
+		}
+
+		private static double ClampLatitude(double latitude) {
+			if(latitude > 89.9999)
+				return 89.9999;
+			if(latitude < -89.9999)
+				return -89.9999;
+			return latitude;
+		}
+
+		private static double NormalizeLongitude(double longitude) {
+			double normalized = longitude % 360.0;
+			if(normalized < -180.0)
+				normalized += 360.0;
+			if(normalized >= 180.0)
+				normalized -= 360.0;
+			return normalized;
+		}
+
+		private static double ElevationCore(CelestialBody body, double latitude, double longitude) {
+			object result = getElevationMethod.Invoke(null, new object[] { body, longitude, latitude });
+			return Convert.ToDouble(result);
+		}
+
+		private static double SlopeCore(CelestialBody body, double latitude, double longitude, double sampleOffsetMeters) {
+			double centerElevation = ElevationCore(body, latitude, longitude);
+			object result = slopeMethod.Invoke(null, new object[] { centerElevation, body, longitude, latitude, sampleOffsetMeters });
+			return Convert.ToDouble(result);
+		}
+
+		private static IList<double> CollectSlopeSamples(CelestialBody body, double latitude, double longitude, double radiusMeters, double stepMeters, double sampleOffsetMeters) {
+			List<double> samples = new List<double>();
+			double bodyRadius = body != null ? body.Radius : 0.0;
+			if(bodyRadius <= 0)
+				throw new SCANsatServiceException("Body radius is unavailable.");
+
+			double centerLat = ClampLatitude(latitude);
+			double centerLon = NormalizeLongitude(longitude);
+			double centerLatRad = centerLat * (Math.PI / 180.0);
+			double metersToDegrees = 180.0 / (Math.PI * bodyRadius);
+			double cosLat = Math.Cos(centerLatRad);
+			if(Math.Abs(cosLat) < 0.01)
+				cosLat = cosLat >= 0 ? 0.01 : -0.01;
+
+			for(double northMeters = -radiusMeters; northMeters <= radiusMeters + 1e-9; northMeters += stepMeters) {
+				double sampleLat = ClampLatitude(centerLat + (northMeters * metersToDegrees));
+				for(double eastMeters = -radiusMeters; eastMeters <= radiusMeters + 1e-9; eastMeters += stepMeters) {
+					double lonDeltaDeg = (eastMeters * metersToDegrees) / cosLat;
+					double sampleLon = NormalizeLongitude(centerLon + lonDeltaDeg);
+					samples.Add(SlopeCore(body, sampleLat, sampleLon, sampleOffsetMeters));
+				}
+			}
+
+			if(samples.Count == 0)
+				samples.Add(SlopeCore(body, centerLat, centerLon, sampleOffsetMeters));
+
+			return samples;
+		}
+
+		private static SiteAssessmentStats CalculateSlopeStats(IList<double> slopes) {
+			if(slopes == null || slopes.Count == 0)
+				return new SiteAssessmentStats(0.0, 0.0, 0.0);
+
+			double sum = 0.0;
+			double max = 0.0;
+			for(int i = 0; i < slopes.Count; i++) {
+				double value = Math.Abs(slopes[i]);
+				sum += value;
+				if(value > max)
+					max = value;
+			}
+
+			double mean = sum / slopes.Count;
+			double varianceSum = 0.0;
+			for(int i = 0; i < slopes.Count; i++) {
+				double delta = Math.Abs(slopes[i]) - mean;
+				varianceSum += delta * delta;
+			}
+
+			double stdDev = Math.Sqrt(varianceSum / slopes.Count);
+			return new SiteAssessmentStats(mean, max, stdDev);
+		}
+
+		private static double ComputeLandingScore(double meanSlopeDeg, double maxSlopeDeg, double roughnessDeg, double maxSafeSlopeDeg, double maxSafeRoughnessDeg) {
+			double maxSlopeLimit = Math.Max(0.0001, maxSafeSlopeDeg);
+			double maxRoughnessLimit = Math.Max(0.0001, maxSafeRoughnessDeg);
+
+			double maxSlopeScore = Clamp01((maxSlopeLimit - maxSlopeDeg) / maxSlopeLimit);
+			double meanSlopeScore = Clamp01((maxSlopeLimit - meanSlopeDeg) / maxSlopeLimit);
+			double roughnessScore = Clamp01((maxRoughnessLimit - roughnessDeg) / maxRoughnessLimit);
+
+			return (0.5 * maxSlopeScore) + (0.3 * roughnessScore) + (0.2 * meanSlopeScore);
+		}
+
 		private static void RequireMethods(params MethodInfo[] methods) {
 			if(methods.Any(m => m == null))
 				throw new SCANsatServiceException("SCANsat API methods are unavailable for this SCANsat build.");
@@ -381,18 +498,65 @@ namespace KRPC.SCANsat {
 			WarnLegacyServiceUsage();
 			RequireMethods(getElevationMethod);
 			CelestialBody body = RequireBody(bodyName);
-			object result = getElevationMethod.Invoke(null, new object[] { body, longitude, latitude });
-			return Convert.ToDouble(result);
+			return ElevationCore(body, latitude, longitude);
 		}
 
 		[KRPCProcedure]
 		public static double Slope(string bodyName, double latitude, double longitude, double sampleOffsetMeters = 5.0) {
 			WarnLegacyServiceUsage();
 			RequireMethods(getElevationMethod, slopeMethod);
+			RequirePositive("sampleOffsetMeters", sampleOffsetMeters);
 			CelestialBody body = RequireBody(bodyName);
-			double centerElevation = Elevation(bodyName, latitude, longitude);
-			object result = slopeMethod.Invoke(null, new object[] { centerElevation, body, longitude, latitude, sampleOffsetMeters });
-			return Convert.ToDouble(result);
+			return SlopeCore(body, latitude, longitude, sampleOffsetMeters);
+		}
+
+		[KRPCProcedure]
+		public static double Roughness(string bodyName, double latitude, double longitude, double radiusMeters = 60.0, double stepMeters = 20.0, double sampleOffsetMeters = 5.0) {
+			WarnLegacyServiceUsage();
+			RequireMethods(getElevationMethod, slopeMethod);
+			RequirePositive("radiusMeters", radiusMeters);
+			RequirePositive("stepMeters", stepMeters);
+			RequirePositive("sampleOffsetMeters", sampleOffsetMeters);
+
+			CelestialBody body = RequireBody(bodyName);
+			IList<double> slopes = CollectSlopeSamples(body, latitude, longitude, radiusMeters, stepMeters, sampleOffsetMeters);
+			SiteAssessmentStats stats = CalculateSlopeStats(slopes);
+			return stats.RoughnessDeg;
+		}
+
+		[KRPCProcedure]
+		public static LandingSiteAssessment AssessLandingSite(string bodyName, double latitude, double longitude, double radiusMeters = 60.0, double stepMeters = 20.0, double sampleOffsetMeters = 5.0, double maxSafeSlopeDeg = 12.0, double maxSafeRoughnessDeg = 3.0) {
+			WarnLegacyServiceUsage();
+			RequireMethods(getElevationMethod, slopeMethod, coverageMethod, isCoveredMethod);
+			RequirePositive("radiusMeters", radiusMeters);
+			RequirePositive("stepMeters", stepMeters);
+			RequirePositive("sampleOffsetMeters", sampleOffsetMeters);
+			RequirePositive("maxSafeSlopeDeg", maxSafeSlopeDeg);
+			RequirePositive("maxSafeRoughnessDeg", maxSafeRoughnessDeg);
+
+			CelestialBody body = RequireBody(bodyName);
+			double centerElevation = ElevationCore(body, latitude, longitude);
+			IList<double> slopes = CollectSlopeSamples(body, latitude, longitude, radiusMeters, stepMeters, sampleOffsetMeters);
+			SiteAssessmentStats stats = CalculateSlopeStats(slopes);
+
+			double hiResCoverage = Convert.ToDouble(coverageMethod.Invoke(null, new object[] { (int)ScanType.AltimetryHiRes, body }));
+			bool centerHiResCovered = IsCovered(bodyName, latitude, longitude, ScanType.AltimetryHiRes);
+			double score = ComputeLandingScore(stats.MeanSlopeDeg, stats.MaxSlopeDeg, stats.RoughnessDeg, maxSafeSlopeDeg, maxSafeRoughnessDeg);
+			string recommendation = score >= 0.75 ? "good" : score >= 0.45 ? "marginal" : "avoid";
+
+			return new LandingSiteAssessment(
+				latitude,
+				longitude,
+				centerElevation,
+				stats.MeanSlopeDeg,
+				stats.MaxSlopeDeg,
+				stats.RoughnessDeg,
+				slopes.Count,
+				hiResCoverage,
+				centerHiResCovered,
+				score,
+				recommendation
+			);
 		}
 
 		[KRPCProcedure]
@@ -560,6 +724,68 @@ namespace KRPC.SCANsat {
 
 		[KRPCProperty]
 		public bool Active { get; private set; }
+	}
+
+	[KRPCClass(Service = "SCANsat")]
+	public class LandingSiteAssessment {
+		public LandingSiteAssessment(double latitudeDeg, double longitudeDeg, double elevationM, double meanSlopeDeg, double maxSlopeDeg, double roughnessDeg, int sampleCount, double hiResCoveragePercent, bool centerHiResCovered, double score, string recommendation) {
+			LatitudeDeg = latitudeDeg;
+			LongitudeDeg = longitudeDeg;
+			ElevationM = elevationM;
+			MeanSlopeDeg = meanSlopeDeg;
+			MaxSlopeDeg = maxSlopeDeg;
+			RoughnessDeg = roughnessDeg;
+			SampleCount = sampleCount;
+			HiResCoveragePercent = hiResCoveragePercent;
+			CenterHiResCovered = centerHiResCovered;
+			Score = score;
+			Recommendation = recommendation;
+		}
+
+		[KRPCProperty]
+		public double LatitudeDeg { get; private set; }
+
+		[KRPCProperty]
+		public double LongitudeDeg { get; private set; }
+
+		[KRPCProperty]
+		public double ElevationM { get; private set; }
+
+		[KRPCProperty]
+		public double MeanSlopeDeg { get; private set; }
+
+		[KRPCProperty]
+		public double MaxSlopeDeg { get; private set; }
+
+		[KRPCProperty]
+		public double RoughnessDeg { get; private set; }
+
+		[KRPCProperty]
+		public int SampleCount { get; private set; }
+
+		[KRPCProperty]
+		public double HiResCoveragePercent { get; private set; }
+
+		[KRPCProperty]
+		public bool CenterHiResCovered { get; private set; }
+
+		[KRPCProperty]
+		public double Score { get; private set; }
+
+		[KRPCProperty]
+		public string Recommendation { get; private set; }
+	}
+
+	internal struct SiteAssessmentStats {
+		public SiteAssessmentStats(double meanSlopeDeg, double maxSlopeDeg, double roughnessDeg) {
+			MeanSlopeDeg = meanSlopeDeg;
+			MaxSlopeDeg = maxSlopeDeg;
+			RoughnessDeg = roughnessDeg;
+		}
+
+		public double MeanSlopeDeg { get; private set; }
+		public double MaxSlopeDeg { get; private set; }
+		public double RoughnessDeg { get; private set; }
 	}
 
 	[KRPCException(Service = "SCANsat")]

@@ -6,7 +6,7 @@ It is intended for automation workflows where scripts need to query map coverage
 
 ## Status
 
-- Current release: `v1.1.1`
+- Current release: `v1.2.0`
 - Active branch: `main`
 - Flight scene service: `SCANsat`
 
@@ -47,6 +47,8 @@ Compatibility rollout:
 - `ResourceValue(bodyName, latitude, longitude, resourceName, biomeLock=false)`
 - `Elevation(bodyName, latitude, longitude)`
 - `Slope(bodyName, latitude, longitude, sampleOffsetMeters=5.0)`
+- `Roughness(bodyName, latitude, longitude, radiusMeters=60.0, stepMeters=20.0, sampleOffsetMeters=5.0)`
+- `AssessLandingSite(bodyName, latitude, longitude, radiusMeters=60.0, stepMeters=20.0, sampleOffsetMeters=5.0, maxSafeSlopeDeg=12.0, maxSafeRoughnessDeg=3.0)`
 - `AvailableResources()`
 - `GetScanners(vesselName=null, family=Nothing)`
 - `GetActiveScanners(vesselName=null, family=Nothing)`
@@ -59,6 +61,7 @@ Compatibility rollout:
 - `ScanType`
 - `ScannerFamily`
 - `ScannerModuleStatus`
+- `LandingSiteAssessment`
 - `SCANsatServiceException`
 
 ## Build
@@ -98,7 +101,7 @@ This project is distributed via a custom metadata repo:
 
 Example metadata entry for this mod:
 
-- https://github.com/jasonteknet/jason-ckan-metadata/blob/main/KRPC.SCANsat/KRPC.SCANsat-v1.1.1.ckan
+- https://github.com/jasonteknet/jason-ckan-metadata/blob/main/KRPC.SCANsat/KRPC.SCANsat-v1.2.0.ckan
 
 ## Notes
 
