@@ -39,6 +39,33 @@ namespace KRPC.SCANsat {
 		private static PropertyInfo scannerScanningNowProperty;
 		private static MethodInfo scannerStartScanMethod;
 		private static MethodInfo scannerStopScanMethod;
+		private static bool legacyDeprecationWarned;
+		[ThreadStatic] private static int suppressLegacyWarningDepth;
+
+		internal static IDisposable SuppressLegacyServiceWarning() {
+			suppressLegacyWarningDepth++;
+			return new LegacyWarningScope();
+		}
+
+		private sealed class LegacyWarningScope : IDisposable {
+			private bool disposed;
+
+			public void Dispose() {
+				if(disposed)
+					return;
+				disposed = true;
+				if(suppressLegacyWarningDepth > 0)
+					suppressLegacyWarningDepth--;
+			}
+		}
+
+		private static void WarnLegacyServiceUsage() {
+			if(legacyDeprecationWarned || suppressLegacyWarningDepth > 0)
+				return;
+
+			legacyDeprecationWarned = true;
+			Logger.Warning("Service 'SCANsat' is deprecated and will be removed in a future major release. Use service 'Scansat' (Python: conn.scansat) instead.");
+		}
 
 		private static void InitTypes() {
 			if(typesInitialized)
@@ -246,6 +273,7 @@ namespace KRPC.SCANsat {
 		[KRPCProperty]
 		public static bool APIReady {
 			get {
+				WarnLegacyServiceUsage();
 				InitTypes();
 				bool utilReady = utilType != null &&
 					coverageMethod != null &&
@@ -260,6 +288,7 @@ namespace KRPC.SCANsat {
 		[KRPCProperty]
 		public static bool ScannerAPIReady {
 			get {
+				WarnLegacyServiceUsage();
 				InitTypes();
 				return scannerPartModuleType != null &&
 					scannerSensorTypeField != null &&
@@ -272,6 +301,7 @@ namespace KRPC.SCANsat {
 		[KRPCProperty]
 		public static int ActiveSensors {
 			get {
+				WarnLegacyServiceUsage();
 				if(!APIReady || activeSensorsProperty == null)
 					return -1;
 				return (int)activeSensorsProperty.GetValue(ControllerInstance, null);
@@ -281,6 +311,7 @@ namespace KRPC.SCANsat {
 		[KRPCProperty]
 		public static int ActiveVessels {
 			get {
+				WarnLegacyServiceUsage();
 				if(!APIReady || activeVesselsProperty == null)
 					return -1;
 				return (int)activeVesselsProperty.GetValue(ControllerInstance, null);
@@ -290,6 +321,7 @@ namespace KRPC.SCANsat {
 		[KRPCProperty]
 		public static int ActualPasses {
 			get {
+				WarnLegacyServiceUsage();
 				if(!APIReady || actualPassesProperty == null)
 					return -1;
 				return (int)actualPassesProperty.GetValue(ControllerInstance, null);
@@ -298,6 +330,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static bool BodyKnown(string bodyName) {
+			WarnLegacyServiceUsage();
 			if(!APIReady || getDataMethod == null)
 				return false;
 			return getDataMethod.Invoke(ControllerInstance, new object[] { bodyName }) != null;
@@ -305,6 +338,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static double Coverage(string bodyName, ScanType scanType) {
+			WarnLegacyServiceUsage();
 			RequireMethods(coverageMethod);
 			CelestialBody body = RequireBody(bodyName);
 			object result = coverageMethod.Invoke(null, new object[] { (int)scanType, body });
@@ -313,6 +347,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static double CoverageBySensor(string bodyName, ScannerFamily family) {
+			WarnLegacyServiceUsage();
 			int mask = NormalizeFamilyMask(family);
 			if(mask == 0)
 				throw new SCANsatServiceException("Scanner family is required.");
@@ -321,6 +356,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static bool IsCovered(string bodyName, double latitude, double longitude, ScanType scanType) {
+			WarnLegacyServiceUsage();
 			RequireMethods(isCoveredMethod);
 			CelestialBody body = RequireBody(bodyName);
 			object scanTypeArg = isCoveredMethod.GetParameters()[3].ParameterType == typeof(short) ? (object)(short)(int)scanType : (int)scanType;
@@ -330,6 +366,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static double ResourceValue(string bodyName, double latitude, double longitude, string resourceName, bool biomeLock = false) {
+			WarnLegacyServiceUsage();
 			RequireMethods(resourceOverlayMethod);
 			if(string.IsNullOrWhiteSpace(resourceName))
 				throw new SCANsatServiceException("Resource name is required.");
@@ -341,6 +378,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static double Elevation(string bodyName, double latitude, double longitude) {
+			WarnLegacyServiceUsage();
 			RequireMethods(getElevationMethod);
 			CelestialBody body = RequireBody(bodyName);
 			object result = getElevationMethod.Invoke(null, new object[] { body, longitude, latitude });
@@ -349,6 +387,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static double Slope(string bodyName, double latitude, double longitude, double sampleOffsetMeters = 5.0) {
+			WarnLegacyServiceUsage();
 			RequireMethods(getElevationMethod, slopeMethod);
 			CelestialBody body = RequireBody(bodyName);
 			double centerElevation = Elevation(bodyName, latitude, longitude);
@@ -358,6 +397,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static IList<string> AvailableResources() {
+			WarnLegacyServiceUsage();
 			if(!APIReady || resourcesMethod == null)
 				return new List<string>();
 
@@ -382,6 +422,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static IList<ScannerModuleStatus> GetScanners(string vesselName = null, ScannerFamily family = ScannerFamily.Nothing) {
+			WarnLegacyServiceUsage();
 			RequireScannerMethods();
 			Vessel vessel = RequireVessel(vesselName);
 			return DescribeScannerModules(vessel, family, false).ToList();
@@ -389,6 +430,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static IList<ScannerModuleStatus> GetActiveScanners(string vesselName = null, ScannerFamily family = ScannerFamily.Nothing) {
+			WarnLegacyServiceUsage();
 			RequireScannerMethods();
 			Vessel vessel = RequireVessel(vesselName);
 			return DescribeScannerModules(vessel, family, true).ToList();
@@ -396,6 +438,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static bool IsScannerEnabled(string vesselName, uint partFlightId, ScannerFamily family) {
+			WarnLegacyServiceUsage();
 			RequireScannerMethods();
 			Vessel vessel = RequireVessel(vesselName);
 			int familyMask = NormalizeFamilyMask(family);
@@ -411,6 +454,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static void SetScannerEnabled(string vesselName, uint partFlightId, ScannerFamily family, bool enabled) {
+			WarnLegacyServiceUsage();
 			RequireScannerMethods();
 			Vessel vessel = RequireVessel(vesselName);
 			int familyMask = NormalizeFamilyMask(family);
@@ -426,6 +470,7 @@ namespace KRPC.SCANsat {
 
 		[KRPCProcedure]
 		public static uint SetSingleScannerEnabled(string vesselName, ScannerFamily family, uint preferredPartFlightId = 0) {
+			WarnLegacyServiceUsage();
 			RequireScannerMethods();
 			Vessel vessel = RequireVessel(vesselName);
 			int familyMask = NormalizeFamilyMask(family);

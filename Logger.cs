@@ -9,5 +9,9 @@ namespace KRPC.SCANsat {
 		internal static void Error(string message) {
 			UnityLogger.Log(UnityEngine.LogType.Error, "[KRPC.SCANsat] " + message);
 		}
+
+		internal static void Warning(string message) {
+			UnityLogger.Log(UnityEngine.LogType.Warning, "[KRPC.SCANsat] " + message);
+		}
 	}
 }

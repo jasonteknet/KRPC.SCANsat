@@ -6,7 +6,7 @@ It is intended for automation workflows where scripts need to query map coverage
 
 ## Status
 
-- Current release: `v1.1.0`
+- Current release: `v1.1.1`
 - Active branch: `main`
 - Flight scene service: `SCANsat`
 
@@ -25,6 +25,10 @@ It is intended for automation workflows where scripts need to query map coverage
 4. Start KSP and connect your kRPC client.
 
 ## Public API (Service: `SCANsat`)
+
+Compatibility rollout:
+- Legacy service name: `SCANsat` (Python binding typically `conn.sca_nsat`) - deprecated
+- New service name: `Scansat` (Python binding `conn.scansat`) - preferred
 
 ### Properties
 
@@ -94,9 +98,10 @@ This project is distributed via a custom metadata repo:
 
 Example metadata entry for this mod:
 
-- https://github.com/jasonteknet/jason-ckan-metadata/blob/main/KRPC.SCANsat/KRPC.SCANsat-v1.1.0.ckan
+- https://github.com/jasonteknet/jason-ckan-metadata/blob/main/KRPC.SCANsat/KRPC.SCANsat-v1.1.1.ckan
 
 ## Notes
 
 - Scanner control procedures require SCANsat scanner part-module APIs (`ScannerAPIReady`).
 - If SCANsat internals change, service methods may throw `SCANsatServiceException` when signatures are unavailable.
+- Legacy `SCANsat` service emits a one-time deprecation warning in KSP logs; migrate clients to `Scansat`.
